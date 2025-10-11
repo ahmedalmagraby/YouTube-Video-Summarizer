@@ -65,9 +65,31 @@ const FormattedText: React.FC<{ text: string; isRtl?: boolean; isLoading: boolea
 const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ isLoading, error, summary, isRtl }) => {
   const [isCopied, setIsCopied] = useState(false);
 
+  const textToCopy = useMemo(() => {
+    if (!summary) return '';
+
+    const lines = summary.split('\n').filter(line => line.trim() !== '');
+
+    const titleLine = lines.find(line => line.toLowerCase().startsWith('title:'));
+    const rawTitle = titleLine ? titleLine.substring(6).trim() : '';
+
+    const headerLine = lines.find(line => line.toLowerCase().startsWith('insightsheader:'));
+    const rawInsightsHeader = headerLine ? headerLine.substring(15).trim() : '';
+
+    const keyPoints = lines
+        .filter(line => line.trim().startsWith('*'))
+        .map(line => line.trim().substring(1).trim());
+
+    return [
+        rawTitle,
+        (rawInsightsHeader && keyPoints.length > 0 ? `\n${rawInsightsHeader}` : ''),
+        ...keyPoints.map(point => `• ${point}`)
+    ].filter(Boolean).join('\n').trim();
+  }, [summary]);
+
   const handleCopy = () => {
-    if (!summary) return;
-    navigator.clipboard.writeText(summary)
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy)
       .then(() => {
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
@@ -102,16 +124,19 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ isLoading, error, summa
           {summary && !isLoading && !error && (
               <button
                   onClick={handleCopy}
-                  className={`absolute top-3 p-2 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white bg-gray-200/50 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 ${isRtl ? 'left-3' : 'right-3'}`}
+                  className={`absolute top-3 px-3 py-1.5 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-200/50 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 ${isRtl ? 'left-3' : 'right-3'}`}
                   aria-label="Copy summary to clipboard"
               >
                   {isCopied ? (
-                      <div className="flex items-center gap-1.5">
-                          <CheckIcon className="h-5 w-5 text-green-500 dark:text-green-400" />
-                          <span className="text-xs font-semibold text-green-500 dark:text-green-400">Copied!</span>
+                      <div className="flex items-center gap-1.5 text-green-500 dark:text-green-400">
+                          <CheckIcon className="h-5 w-5" />
+                          <span>Copied!</span>
                       </div>
                   ) : (
-                      <ClipboardIcon className="h-5 w-5" />
+                      <div className="flex items-center gap-1.5">
+                          <ClipboardIcon className="h-5 w-5" />
+                          <span>Copy</span>
+                      </div>
                   )}
               </button>
           )}
