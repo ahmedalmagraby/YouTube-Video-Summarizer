@@ -1,0 +1,7 @@
+{
+  "name": "YouTube Video Summarizer",
+  "description": "An application that takes a YouTube video URL and a target language, then uses the Gemini API to generate a concise summary of the video's key insights.",
+  "requestFramePermissions": [
+    "clipboard-read"
+  ]
+}
