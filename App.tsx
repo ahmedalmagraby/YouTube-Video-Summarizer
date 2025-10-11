@@ -6,6 +6,8 @@ import LanguageSelector from './components/LanguageSelector';
 import UrlInput from './components/UrlInput';
 import SummaryDisplay from './components/SummaryDisplay';
 import ThemeToggle from './components/ThemeToggle';
+import VideoPreview from './components/VideoPreview';
+import VideoPreviewSkeleton from './components/VideoPreviewSkeleton';
 import { YouTubeIcon } from './components/icons/YouTubeIcon';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { XCircleIcon } from './components/icons/XCircleIcon';
@@ -19,6 +21,8 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isRtl, setIsRtl] = useState<boolean>(!!defaultLanguage.rtl);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [videoMeta, setVideoMeta] = useState<any | null>(null);
+  const [isFetchingMeta, setIsFetchingMeta] = useState<boolean>(false);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -36,6 +40,36 @@ const App: React.FC = () => {
   const isUrlValid = (videoUrl: string): boolean => {
     return YOUTUBE_VIDEO_URL_REGEX.test(videoUrl);
   };
+
+  useEffect(() => {
+    if (!isUrlValid(url)) {
+      setVideoMeta(null);
+      return;
+    }
+
+    const handler = setTimeout(async () => {
+      setIsFetchingMeta(true);
+      setVideoMeta(null);
+      setError(null);
+      try {
+        const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        if (!response.ok) {
+          throw new Error('Could not fetch video details.');
+        }
+        const data = await response.json();
+        setVideoMeta(data);
+      } catch (e) {
+        setVideoMeta(null);
+        console.error(e);
+      } finally {
+        setIsFetchingMeta(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [url]);
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newLanguageName = e.target.value;
@@ -69,6 +103,7 @@ const App: React.FC = () => {
     setUrl('');
     setSummary('');
     setError(null);
+    setVideoMeta(null);
   };
 
 
@@ -90,7 +125,7 @@ const App: React.FC = () => {
           </p>
         </header>
 
-        <main className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-xl dark:shadow-2xl border border-gray-200 dark:border-gray-700/60">
+        <main className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-xl dark:shadow-2xl border border-gray-200 dark:border-gray-700/60 space-y-8">
           <div className="space-y-6">
             <UrlInput value={url} onChange={(e) => setUrl(e.target.value)} onPaste={setUrl} disabled={isLoading} />
             <LanguageSelector
@@ -130,6 +165,13 @@ const App: React.FC = () => {
             </div>
           </div>
         
+          {(isFetchingMeta || videoMeta) && (
+            <div>
+              {isFetchingMeta && <VideoPreviewSkeleton />}
+              {videoMeta && !isFetchingMeta && <VideoPreview meta={videoMeta} />}
+            </div>
+          )}
+
           <SummaryDisplay isLoading={isLoading} error={error} summary={summary} isRtl={isRtl} />
         </main>
         
