@@ -1,13 +1,10 @@
 
 import React from 'react';
 import { UserCircleIcon } from './icons/UserCircleIcon';
+import { VideoMeta } from '../types';
 
 interface VideoPreviewProps {
-  meta: {
-    thumbnail_url: string;
-    title: string;
-    author_name: string;
-  };
+  meta: VideoMeta;
 }
 
 const VideoPreview: React.FC<VideoPreviewProps> = ({ meta }) => {

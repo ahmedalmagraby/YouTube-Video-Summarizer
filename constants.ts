@@ -1,9 +1,5 @@
 
-export interface Language {
-  code: string;
-  name: string;
-  rtl?: boolean;
-}
+import { Language } from './types';
 
 // This regex robustly matches standard YouTube video URLs and youtu.be shortlinks.
 // It specifically handles two main formats:

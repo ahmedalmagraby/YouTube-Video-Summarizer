@@ -2,15 +2,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { summarizeYouTubeVideoStream } from './services/geminiService';
 import { LANGUAGES, YOUTUBE_VIDEO_URL_REGEX } from './constants';
+import { HistoryItem, VideoMeta } from './types';
 import LanguageSelector from './components/LanguageSelector';
 import UrlInput from './components/UrlInput';
 import SummaryDisplay from './components/SummaryDisplay';
 import ThemeToggle from './components/ThemeToggle';
 import VideoPreview from './components/VideoPreview';
 import VideoPreviewSkeleton from './components/VideoPreviewSkeleton';
+import History from './components/History';
 import { YouTubeIcon } from './components/icons/YouTubeIcon';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { XCircleIcon } from './components/icons/XCircleIcon';
+
+const HISTORY_STORAGE_KEY = 'yt-summarizer-history';
 
 const App: React.FC = () => {
   const defaultLanguage = LANGUAGES.find(lang => lang.name === 'English') || LANGUAGES[0];
@@ -21,9 +25,11 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isRtl, setIsRtl] = useState<boolean>(!!defaultLanguage.rtl);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [videoMeta, setVideoMeta] = useState<any | null>(null);
+  const [videoMeta, setVideoMeta] = useState<VideoMeta | null>(null);
   const [isFetchingMeta, setIsFetchingMeta] = useState<boolean>(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  // Load theme from local storage
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -32,6 +38,19 @@ const App: React.FC = () => {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+  
+  // Load history from local storage
+  useEffect(() => {
+    try {
+      const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (storedHistory) {
+        setHistory(JSON.parse(storedHistory));
+      }
+    } catch (e) {
+      console.error("Failed to load history from localStorage", e);
+      localStorage.removeItem(HISTORY_STORAGE_KEY); // Clear corrupted data
+    }
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
@@ -87,25 +106,66 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     setSummary('');
+    let fullSummary = '';
 
     try {
       await summarizeYouTubeVideoStream(url, language, (chunk) => {
         setSummary((prev) => prev + chunk);
+        fullSummary += chunk;
       });
+
+      if (videoMeta) {
+        const newHistoryItem: HistoryItem = {
+          id: new Date().toISOString() + url, // Create a more unique ID
+          url,
+          summary: fullSummary,
+          language,
+          timestamp: new Date().toISOString(),
+          videoMeta,
+        };
+        
+        setHistory(prevHistory => {
+          // Avoid duplicates by filtering out existing entries with the same URL
+          const filteredHistory = prevHistory.filter(item => item.url !== url);
+          const updatedHistory = [newHistoryItem, ...filteredHistory].slice(0, 20); // Keep max 20 items
+          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
+          return updatedHistory;
+        });
+      }
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
     }
-  }, [url, language]);
+  }, [url, language, videoMeta]);
 
   const handleClear = () => {
     setUrl('');
     setSummary('');
     setError(null);
     setVideoMeta(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleClearHistory = () => {
+    if (window.confirm('Are you sure you want to clear your entire summary history? This cannot be undone.')) {
+        setHistory([]);
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+    }
+  };
+
+  const handleSelectHistoryItem = (item: HistoryItem) => {
+    setIsLoading(false);
+    setError(null);
+    setUrl(item.url);
+    setLanguage(item.language);
+    setVideoMeta(item.videoMeta);
+    setSummary(item.summary);
+    const lang = LANGUAGES.find(l => l.name === item.language);
+    setIsRtl(!!lang?.rtl);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900 text-gray-800 dark:text-white flex flex-col items-center justify-center p-4 sm:p-6 font-sans transition-colors duration-300">
@@ -136,7 +196,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleSummarize}
-                disabled={isLoading || !url}
+                disabled={isLoading || !url || !videoMeta}
                 className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-500/50"
               >
                 {isLoading ? (
@@ -175,7 +235,9 @@ const App: React.FC = () => {
           <SummaryDisplay isLoading={isLoading} error={error} summary={summary} isRtl={isRtl} />
         </main>
         
-        <footer className="text-center mt-8 text-gray-500 dark:text-gray-500 text-sm">
+        <History history={history} onSelectItem={handleSelectHistoryItem} onClearHistory={handleClearHistory} />
+
+        <footer className="text-center mt-8 pb-4 text-gray-500 dark:text-gray-500 text-sm">
           <p>Powered by Google Gemini</p>
         </footer>
       </div>
